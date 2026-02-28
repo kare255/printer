@@ -3,44 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>طباعة فورية</title>
+    <title>طباعة ميزان سريعة</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; }
-        input { width: 85%; padding: 15px; margin: 10px; font-size: 20px; border-radius: 10px; border: 1px solid #ccc; }
-        .btn-print { width: 90%; padding: 20px; background: #1a73e8; color: white; border: none; border-radius: 15px; font-size: 22px; font-weight: bold; cursor: pointer; }
-        #barcodeImg { margin-top: 20px; max-width: 100%; display: none; }
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #ffffff; }
+        .container { border: 2px solid #2980b9; padding: 25px; border-radius: 20px; max-width: 350px; margin: auto; }
+        input { width: 90%; padding: 15px; margin: 10px 0; font-size: 20px; border: 1px solid #ddd; border-radius: 10px; text-align: center; }
+        .btn-print { width: 100%; padding: 20px; background: #2980b9; color: white; border: none; border-radius: 12px; font-size: 22px; font-weight: bold; cursor: pointer; }
+        #barcodeImg { margin-top: 20px; width: 100%; display: none; }
     </style>
 </head>
 <body>
-    <h3>نظام الطباعة السريع</h3>
-    <input type="number" id="pCode" placeholder="كود المنتج" oninput="generate()">
-    <input type="number" id="pWeight" placeholder="الوزن" oninput="generate()">
-    <br><br>
-    <button class="btn-print" onclick="printNow()">طباعة الآن 🖨️</button>
 
-    <div id="printArea"><img id="barcodeImg" src=""></div>
-    <canvas id="canvas" style="display:none;"></canvas>
+<div class="container">
+    <h3>نظام الطباعة الذكي</h3>
+    <input type="number" id="pCode" placeholder="كود المنتج" oninput="gen()">
+    <input type="number" id="pWeight" placeholder="الوزن" oninput="gen()">
+    
+    <button class="btn-print" onclick="printWithApp()">طـبـاعة الآن 🖨️</button>
+    
+    <div id="result">
+        <img id="barcodeImg" src="">
+    </div>
+</div>
+
+<canvas id="c" style="display:none;"></canvas>
 
 <script>
-    function generate() {
+    // توليد الباركود فور إدخال الأرقام
+    function gen() {
         const c = document.getElementById('pCode').value.padStart(5, '0');
         const w = document.getElementById('pWeight').value.padStart(5, '0');
         const val = "21" + c + w + "0";
-        const canvas = document.getElementById('canvas');
-        JsBarcode(canvas, val, { format: "CODE128", displayValue: true, height: 80, width: 2.5, margin: 5 });
+        const canvas = document.getElementById('c');
+        
+        JsBarcode(canvas, val, {
+            format: "CODE128",
+            displayValue: true,
+            fontSize: 25,
+            height: 100,
+            width: 3,
+            margin: 10
+        });
+
         const img = document.getElementById('barcodeImg');
         img.src = canvas.toDataURL("image/png");
         img.style.display = "inline-block";
     }
 
-    function printNow() {
-        const imgData = document.getElementById('barcodeImg').src;
-        if (!imgData) return alert("يرجى إدخال البيانات أولاً");
-        
-        // محاولة فتح التطبيق مباشرة (com.iprint.project)
-        const intentUrl = `intent:#Intent;action=android.intent.action.SEND;type=image/png;component=com.iprint.project/com.iprint.project.MainActivity;S.android.intent.extra.STREAM=${imgData};end`;
-        window.location.href = intentUrl;
+    // إرسال الصورة للتطبيق بضغطة واحدة
+    async function printWithApp() {
+        const imgSource = document.getElementById('barcodeImg').src;
+        if (!imgSource) return alert("الرجاء إدخال البيانات أولاً");
+
+        const blob = await (await fetch(imgSource)).blob();
+        const file = new File([blob], "label.png", { type: "image/png" });
+
+        // استخدام نظام المشاركة لفتح Bluetooth Print مباشرة
+        if (navigator.share) {
+            navigator.share({
+                files: [file]
+            }).then(() => {
+                console.log('تم الإرسال للتطبيق');
+            }).catch(console.error);
+        } else {
+            alert("يرجى استخدام متصفح Chrome");
+        }
     }
 </script>
 </body>
