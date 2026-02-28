@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>طباعة باركود الصورة</title>
+    <title>طباعة باركود كصورة</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
@@ -14,21 +14,21 @@
         .btn-print { background: #28a745; color: white; }
         #status { margin-top: 10px; color: #666; font-size: 14px; }
         #barcodeDisplay { margin-top: 20px; border: 1px solid #eee; padding: 10px; background: #fff; }
+        #barcodeImg { max-width: 100%; height: auto; } /* لعرض الصورة */
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>طباعة باركود كصورة</h2>
+    <h2>طباعة باركود الميزان (صورة)</h2>
     <p id="status">الحالة: غير متصل ❌</p>
     <button class="btn-connect" onclick="connectPrinter()">1. ربط الطابعة</button>
     <hr>
     <input type="number" id="productCode" placeholder="كود المنتج (5 أرقام)">
     <input type="number" id="weightInput" placeholder="الوزن (5 أرقام)">
-    <button class="btn-print" onclick="generateAndPrintBarcode()">2. طباعة باركود كصورة 🖨️</button>
+    <button class="btn-print" onclick="generateAndPrintBarcode()">2. توليد وطباعة الباركود 🖨️</button>
     <div id="barcodeDisplay">
-        <svg id="barcodeSvg"></svg>
-    </div>
+        <img id="barcodeImg" alt="Barcode Preview"> </div>
 </div>
 
 <script>
@@ -61,61 +61,45 @@
         const suffix = "0";
         const fullBarcodeString = prefix + code + weight + suffix;
 
-        // 1. توليد الباركود كـ SVG وعرضه
-        try {
-            JsBarcode("#barcodeSvg", fullBarcodeString, {
-                format: "CODE128",
-                displayValue: true, // لإظهار الأرقام تحت الباركود
-                textMargin: 2,
-                fontSize: 18,
-                height: 80, // ارتفاع الباركود بالبكسل
-                width: 2 // عرض الأعمدة الفردية
-            });
-        } catch (e) {
-            alert("خطأ في توليد الباركود: " + e.message);
-            return;
-        }
-
-        // 2. تحويل الـ SVG إلى صورة (Canvas)
-        const svgElement = document.getElementById('barcodeSvg');
-        const svgData = new XMLSerializer().serializeToString(svgElement);
+        // 1. توليد الباركود كـ صورة (PNG)
+        // يتم استخدام JsBarcode لتوليد SVG ثم يتم رسمه على Canvas لتحويله لـ PNG
         const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
+        JsBarcode(canvas, fullBarcodeString, {
+            format: "CODE128",
+            displayValue: true, // لإظهار الأرقام تحت الباركود
+            textMargin: 2,
+            fontSize: 18,
+            height: 80, // ارتفاع الباركود بالبكسل
+            width: 2 // عرض أعمدة الباركود
+        });
 
-        img.onload = async () => {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
+        // عرض الصورة على الشاشة للمعاينة
+        document.getElementById('barcodeImg').src = canvas.toDataURL("image/png");
 
-            // 3. تحويل صورة Canvas إلى بيانات BMP أو تنسيق نقطي مناسب للطابعة
-            // هذه الخطوة هي الأصعب وتحتاج مكتبة متخصصة
-            // للتبسيط، سنحاول إرسال البيانات كـ ESC/POS image commands
-            // ملاحظة: قد لا تعمل هذه الطريقة مع كل الطابعات مباشرة
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const rawBitmap = convertImageDataToPrinterFormat(imageData); // دالة مخصصة
-            
-            const encoder = new TextEncoder();
-            
-            // أوامر ESC/POS لإرسال الصورة النقطية
-            const commands = [
-                new Uint8Array([0x1B, 0x40]), // تهيئة
-                new Uint8Array([0x1B, 0x61, 0x01]), // توسيط
-                new Uint8Array([0x1D, 0x76, 0x30, 0x00, rawBitmap.widthBytes, 0x00, rawBitmap.height, 0x00]), // أمر طباعة صورة نقطية
-                rawBitmap.data,
-                new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]) // تغذية ورق
-            ];
+        // 2. تحويل بيانات Canvas إلى تنسيق نقطي (Bitmap) مناسب لأمر ESC/POS
+        const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+        const rawBitmap = convertImageDataToPrinterFormat(imageData); // دالة مخصصة لتحويل البكسلات
 
-            try {
-                for (let cmd of commands) {
-                    await printerCharacteristic.writeValue(cmd);
-                }
-                alert("تم إرسال صورة الباركود!");
-            } catch (error) {
-                alert("خطأ أثناء إرسال الصورة للطابعة: " + error);
+        const commands = [
+            new Uint8Array([0x1B, 0x40]), // تهيئة الطابعة
+            new Uint8Array([0x1B, 0x61, 0x01]), // توسيط
+            // أمر طباعة صورة نقطية (ESC * m nL nH d1...dk)
+            // m=32 (20h) لطباعة صورة أحادية اللون بكثافة 200dpi
+            // nL, nH = عرض الصورة بالبكسل / 8 (لأن البايت الواحد يمثل 8 بكسلات)
+            // d1...dk = بيانات الصورة
+            new Uint8Array([0x1B, 0x2A, 0x20, rawBitmap.widthBytes, rawBitmap.height]), // m=32 (20h), nL, nH
+            rawBitmap.data, // بيانات البكسل الخام
+            new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]) // تغذية ورق لقطع الملصق
+        ];
+
+        try {
+            for (let cmd of commands) {
+                await printerCharacteristic.writeValue(cmd);
             }
-        };
-        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+            alert("تم إرسال صورة الباركود للطابعة!");
+        } catch (error) {
+            alert("خطأ أثناء إرسال الصورة: " + error);
+        }
     }
 
     // دالة لتحويل بيانات الصورة من Canvas إلى تنسيق يفهمه أمر ESC/POS (أحادية اللون)
