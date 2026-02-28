@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>طباعة باركود كصورة</title>
+    <title>طباعة باركود الصورة</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
@@ -13,22 +13,21 @@
         .btn-connect { background: #007bff; color: white; }
         .btn-print { background: #28a745; color: white; }
         #status { margin-top: 10px; color: #666; font-size: 14px; }
-        #barcodeDisplay { margin-top: 20px; border: 1px solid #eee; padding: 10px; background: #fff; }
-        #barcodeImg { max-width: 100%; height: auto; } /* لعرض الصورة */
+        #barcodeImg { max-width: 100%; margin-top: 20px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>طباعة باركود الميزان (صورة)</h2>
+    <h2>طباعة باركود الميزان</h2>
     <p id="status">الحالة: غير متصل ❌</p>
     <button class="btn-connect" onclick="connectPrinter()">1. ربط الطابعة</button>
     <hr>
     <input type="number" id="productCode" placeholder="كود المنتج (5 أرقام)">
     <input type="number" id="weightInput" placeholder="الوزن (5 أرقام)">
-    <button class="btn-print" onclick="generateAndPrintBarcode()">2. توليد وطباعة الباركود 🖨️</button>
-    <div id="barcodeDisplay">
-        <img id="barcodeImg" alt="Barcode Preview"> </div>
+    <button class="btn-print" onclick="generateAndPrint()">2. طباعة الباركود 🖨️</button>
+    <canvas id="barcodeCanvas" style="display:none;"></canvas>
+    <img id="barcodeImg">
 </div>
 
 <script>
@@ -45,90 +44,69 @@
             const server = await device.gatt.connect();
             const service = await server.getPrimaryService(SERVICE_UUID);
             printerCharacteristic = await service.getCharacteristic(CHAR_UUID);
-            document.getElementById('status').innerText = "متصل بـ " + device.name + " ✅";
+            document.getElementById('status').innerText = "متصل ✅";
             document.getElementById('status').style.color = "green";
-        } catch (error) {
-            alert("فشل الاتصال: " + error);
-        }
+        } catch (error) { alert("فشل الاتصال: " + error); }
     }
 
-    async function generateAndPrintBarcode() {
+    async function generateAndPrint() {
         if (!printerCharacteristic) { alert("اتصل بالطابعة أولاً!"); return; }
 
-        const prefix = "21";
-        const code = document.getElementById('productCode').value.padStart(5, '0').substring(0, 5);
-        const weight = document.getElementById('weightInput').value.padStart(5, '0').substring(0, 5);
-        const suffix = "0";
-        const fullBarcodeString = prefix + code + weight + suffix;
+        const fullBarcode = "21" + 
+            document.getElementById('productCode').value.padStart(5, '0') + 
+            document.getElementById('weightInput').value.padStart(5, '0') + "0";
 
-        // 1. توليد الباركود كـ صورة (PNG)
-        // يتم استخدام JsBarcode لتوليد SVG ثم يتم رسمه على Canvas لتحويله لـ PNG
-        const canvas = document.createElement('canvas');
-        JsBarcode(canvas, fullBarcodeString, {
-            format: "CODE128",
-            displayValue: true, // لإظهار الأرقام تحت الباركود
-            textMargin: 2,
-            fontSize: 18,
-            height: 80, // ارتفاع الباركود بالبكسل
-            width: 2 // عرض أعمدة الباركود
+        const canvas = document.getElementById('barcodeCanvas');
+        JsBarcode(canvas, fullBarcode, {
+            format: "CODE128", displayValue: true, fontSize: 20, height: 80, width: 3
         });
 
-        // عرض الصورة على الشاشة للمعاينة
-        document.getElementById('barcodeImg').src = canvas.toDataURL("image/png");
+        const imgDisplay = document.getElementById('barcodeImg');
+        imgDisplay.src = canvas.toDataURL("image/png");
+        imgDisplay.style.display = "block";
 
-        // 2. تحويل بيانات Canvas إلى تنسيق نقطي (Bitmap) مناسب لأمر ESC/POS
-        const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-        const rawBitmap = convertImageDataToPrinterFormat(imageData); // دالة مخصصة لتحويل البكسلات
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const bmpData = convertToEscPos(imageData);
 
-        const commands = [
-            new Uint8Array([0x1B, 0x40]), // تهيئة الطابعة
-            new Uint8Array([0x1B, 0x61, 0x01]), // توسيط
-            // أمر طباعة صورة نقطية (ESC * m nL nH d1...dk)
-            // m=32 (20h) لطباعة صورة أحادية اللون بكثافة 200dpi
-            // nL, nH = عرض الصورة بالبكسل / 8 (لأن البايت الواحد يمثل 8 بكسلات)
-            // d1...dk = بيانات الصورة
-            new Uint8Array([0x1B, 0x2A, 0x20, rawBitmap.widthBytes, rawBitmap.height]), // m=32 (20h), nL, nH
-            rawBitmap.data, // بيانات البكسل الخام
-            new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]) // تغذية ورق لقطع الملصق
-        ];
+        // أوامر البداية
+        await sendData(new Uint8Array([0x1B, 0x40])); // تهيئة
+        await sendData(new Uint8Array([0x1B, 0x61, 0x01])); // توسيط
 
-        try {
-            for (let cmd of commands) {
-                await printerCharacteristic.writeValue(cmd);
-            }
-            alert("تم إرسال صورة الباركود للطابعة!");
-        } catch (error) {
-            alert("خطأ أثناء إرسال الصورة: " + error);
+        // أمر طباعة الصورة النقطية
+        const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, bmpData.widthBytes, 0x00, bmpData.height, 0x00]);
+        await sendData(header);
+
+        // إرسال بيانات الصورة مقسمة (Chunks)
+        await sendData(bmpData.data);
+
+        // أوامر النهاية (تغذية ورق)
+        await sendData(new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]));
+        alert("تم الإرسال!");
+    }
+
+    async function sendData(data) {
+        const CHUNK_SIZE = 100; // إرسال 100 بايت في كل مرة لتجنب الخطأ
+        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+            const chunk = data.slice(i, i + CHUNK_SIZE);
+            await printerCharacteristic.writeValue(chunk);
         }
     }
 
-    // دالة لتحويل بيانات الصورة من Canvas إلى تنسيق يفهمه أمر ESC/POS (أحادية اللون)
-    function convertImageDataToPrinterFormat(imageData) {
-        const threshold = 128; // عتبة للتحويل لأبيض وأسود
+    function convertToEscPos(imageData) {
         const width = imageData.width;
         const height = imageData.height;
-        const pixels = imageData.data;
-        
-        // حساب عرض البايتات لكل سطر (يجب أن يكون من مضاعفات 8)
         const widthBytes = Math.ceil(width / 8);
         const data = new Uint8Array(widthBytes * height);
-
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
-                const i = (y * width + x) * 4; // مؤشر للبيكسل (RGBA)
-                const r = pixels[i];
-                const g = pixels[i + 1];
-                const b = pixels[i + 2];
-                const avg = (r + g + b) / 3; // متوسط اللون للتحويل لأبيض وأسود
-
-                if (avg < threshold) { // إذا كان غامق (أسود)
-                    const byteIndex = y * widthBytes + Math.floor(x / 8);
-                    const bitIndex = 7 - (x % 8); // من اليمين لليسار (8-bit)
-                    data[byteIndex] |= (1 << bitIndex);
+                const i = (y * width + x) * 4;
+                if ((imageData.data[i] + imageData.data[i+1] + imageData.data[i+2])/3 < 128) {
+                    data[y * widthBytes + Math.floor(x/8)] |= (0x80 >> (x % 8));
                 }
             }
         }
-        return { data: data, widthBytes: widthBytes, height: height };
+        return { data, widthBytes, height };
     }
 </script>
 </body>
