@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>طباعة باركود الميزان</title>
+    <title>طباعة باركود الصورة</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
         .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
@@ -12,18 +13,22 @@
         .btn-connect { background: #007bff; color: white; }
         .btn-print { background: #28a745; color: white; }
         #status { margin-top: 10px; color: #666; font-size: 14px; }
+        #barcodeDisplay { margin-top: 20px; border: 1px solid #eee; padding: 10px; background: #fff; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>نظام باركود الميزان</h2>
+    <h2>طباعة باركود كصورة</h2>
     <p id="status">الحالة: غير متصل ❌</p>
     <button class="btn-connect" onclick="connectPrinter()">1. ربط الطابعة</button>
     <hr>
     <input type="number" id="productCode" placeholder="كود المنتج (5 أرقام)">
     <input type="number" id="weightInput" placeholder="الوزن (5 أرقام)">
-    <button class="btn-print" onclick="printBarcode()">2. طباعة الباركود 🖨️</button>
+    <button class="btn-print" onclick="generateAndPrintBarcode()">2. طباعة باركود كصورة 🖨️</button>
+    <div id="barcodeDisplay">
+        <svg id="barcodeSvg"></svg>
+    </div>
 </div>
 
 <script>
@@ -47,37 +52,99 @@
         }
     }
 
-    async function printBarcode() {
+    async function generateAndPrintBarcode() {
         if (!printerCharacteristic) { alert("اتصل بالطابعة أولاً!"); return; }
 
-        // تجهيز البيانات
         const prefix = "21";
         const code = document.getElementById('productCode').value.padStart(5, '0').substring(0, 5);
         const weight = document.getElementById('weightInput').value.padStart(5, '0').substring(0, 5);
         const suffix = "0";
-        const fullBarcode = prefix + code + weight + suffix;
+        const fullBarcodeString = prefix + code + weight + suffix;
 
-        const encoder = new TextEncoder();
-        
-        // أوامر ESC/POS للباركود
-        const commands = [
-            new Uint8Array([0x1B, 0x40]),          // تهيئة (Initialize)
-            new Uint8Array([0x1B, 0x61, 0x01]),    // توسيط (Center)
-            new Uint8Array([0x1D, 0x68, 0x50]),    // ارتفاع الباركود (80)
-            new Uint8Array([0x1D, 0x48, 0x02]),    // إظهار الأرقام تحت الباركود (Position)
-            new Uint8Array([0x1D, 0x6B, 0x49, fullBarcode.length + 2, 0x7B, 0x42]), // نوع Code 128
-            encoder.encode(fullBarcode),
-            new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]) // تغذية الورق (Feed)
-        ];
-
+        // 1. توليد الباركود كـ SVG وعرضه
         try {
-            for (let cmd of commands) {
-                await printerCharacteristic.writeValue(cmd);
-            }
-            alert("تم إرسال الباركود: " + fullBarcode);
-        } catch (error) {
-            alert("خطأ: " + error);
+            JsBarcode("#barcodeSvg", fullBarcodeString, {
+                format: "CODE128",
+                displayValue: true, // لإظهار الأرقام تحت الباركود
+                textMargin: 2,
+                fontSize: 18,
+                height: 80, // ارتفاع الباركود بالبكسل
+                width: 2 // عرض الأعمدة الفردية
+            });
+        } catch (e) {
+            alert("خطأ في توليد الباركود: " + e.message);
+            return;
         }
+
+        // 2. تحويل الـ SVG إلى صورة (Canvas)
+        const svgElement = document.getElementById('barcodeSvg');
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+
+        img.onload = async () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+
+            // 3. تحويل صورة Canvas إلى بيانات BMP أو تنسيق نقطي مناسب للطابعة
+            // هذه الخطوة هي الأصعب وتحتاج مكتبة متخصصة
+            // للتبسيط، سنحاول إرسال البيانات كـ ESC/POS image commands
+            // ملاحظة: قد لا تعمل هذه الطريقة مع كل الطابعات مباشرة
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const rawBitmap = convertImageDataToPrinterFormat(imageData); // دالة مخصصة
+            
+            const encoder = new TextEncoder();
+            
+            // أوامر ESC/POS لإرسال الصورة النقطية
+            const commands = [
+                new Uint8Array([0x1B, 0x40]), // تهيئة
+                new Uint8Array([0x1B, 0x61, 0x01]), // توسيط
+                new Uint8Array([0x1D, 0x76, 0x30, 0x00, rawBitmap.widthBytes, 0x00, rawBitmap.height, 0x00]), // أمر طباعة صورة نقطية
+                rawBitmap.data,
+                new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]) // تغذية ورق
+            ];
+
+            try {
+                for (let cmd of commands) {
+                    await printerCharacteristic.writeValue(cmd);
+                }
+                alert("تم إرسال صورة الباركود!");
+            } catch (error) {
+                alert("خطأ أثناء إرسال الصورة للطابعة: " + error);
+            }
+        };
+        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+    }
+
+    // دالة لتحويل بيانات الصورة من Canvas إلى تنسيق يفهمه أمر ESC/POS (أحادية اللون)
+    function convertImageDataToPrinterFormat(imageData) {
+        const threshold = 128; // عتبة للتحويل لأبيض وأسود
+        const width = imageData.width;
+        const height = imageData.height;
+        const pixels = imageData.data;
+        
+        // حساب عرض البايتات لكل سطر (يجب أن يكون من مضاعفات 8)
+        const widthBytes = Math.ceil(width / 8);
+        const data = new Uint8Array(widthBytes * height);
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const i = (y * width + x) * 4; // مؤشر للبيكسل (RGBA)
+                const r = pixels[i];
+                const g = pixels[i + 1];
+                const b = pixels[i + 2];
+                const avg = (r + g + b) / 3; // متوسط اللون للتحويل لأبيض وأسود
+
+                if (avg < threshold) { // إذا كان غامق (أسود)
+                    const byteIndex = y * widthBytes + Math.floor(x / 8);
+                    const bitIndex = 7 - (x % 8); // من اليمين لليسار (8-bit)
+                    data[byteIndex] |= (1 << bitIndex);
+                }
+            }
+        }
+        return { data: data, widthBytes: widthBytes, height: height };
     }
 </script>
 </body>
