@@ -2,70 +2,44 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إرسال للتطبيق للطباعة</title>
+    <title>طباعة سريعة مباشر</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f7f6; }
-        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        input { width: 90%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 10px; font-size: 20px; text-align: center; }
-        .btn-send { width: 100%; padding: 20px; background: #1a73e8; color: white; border: none; border-radius: 12px; font-size: 20px; font-weight: bold; cursor: pointer; }
-        #barcodeImg { margin-top: 20px; width: 100%; display: none; border: 1px solid #eee; }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        .card { background: white; padding: 30px; border-radius: 20px; border: 2px solid #1a73e8; max-width: 400px; margin: auto; }
+        input { width: 90%; padding: 15px; margin: 10px 0; border-radius: 10px; border: 1px solid #ddd; font-size: 20px; text-align: center; }
+        .btn-direct { width: 100%; padding: 20px; background: #1a73e8; color: white; border: none; border-radius: 12px; font-size: 22px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>تحويل لملصق وطباعة</h2>
+    <h2>الطباعة المباشرة عبر iPrint</h2>
     <input type="number" id="pCode" placeholder="كود المنتج">
     <input type="number" id="pWeight" placeholder="الوزن">
-    
-    <button class="btn-send" onclick="generateAndSend()">إرسال لتطبيق iPrint 🖨️</button>
-    
+    <button class="btn-direct" onclick="directPrint()">طباعة الآن 🖨️</button>
     <canvas id="canvas" style="display:none;"></canvas>
-    <img id="barcodeImg">
 </div>
 
 <script>
-    async function generateAndSend() {
+    function directPrint() {
         const code = document.getElementById('pCode').value.padStart(5, '0');
         const weight = document.getElementById('pWeight').value.padStart(5, '0');
         const barcodeValue = "21" + code + weight + "0";
 
-        // 1. إنشاء الباركود على الـ Canvas
+        // 1. توليد الباركود
         const canvas = document.getElementById('canvas');
-        JsBarcode(canvas, barcodeValue, {
-            format: "CODE128",
-            displayValue: true,
-            fontSize: 20,
-            height: 100,
-            width: 2,
-            margin: 10
-        });
+        JsBarcode(canvas, barcodeValue, { format: "CODE128", displayValue: true, height: 100 });
+        const imgBase64 = canvas.toDataURL("image/png").split(',')[1];
 
-        // 2. تحويل الـ Canvas إلى ملف صورة (Blob)
-        canvas.toBlob(async (blob) => {
-            const file = new File([blob], "barcode.png", { type: "image/png" });
-            
-            // تحديث المعاينة على الشاشة
-            const imgDisplay = document.getElementById('barcodeImg');
-            imgDisplay.src = URL.createObjectURL(blob);
-            imgDisplay.style.display = "inline-block";
+        // 2. محاولة فتح التطبيق مباشرة عبر بروتوكول Intent
+        // ملاحظة: هذا الأمر يحاول تشغيل واجهة الطباعة في التطبيقات التي تدعم استقبال الصور
+        const intentUrl = `intent:#Intent;action=android.intent.action.SEND;type=image/png;S.android.intent.extra.TEXT=${barcodeValue};component=com.iprint.project/.MainActivity;end`;
+        
+        // إذا لم ينجح الرابط المباشر، سنستخدم الطريقة التي تفتح نافذة التطبيق الصغير
+        window.location.href = intentUrl;
 
-            // 3. استخدام خاصية المشاركة لإرسال الصورة لتطبيق iPrint
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                try {
-                    await navigator.share({
-                        files: [file],
-                        title: 'الباركود المستخرج',
-                        text: barcodeValue
-                    });
-                } catch (err) {
-                    console.log("تم إلغاء المشاركة أو حدث خطأ: ", err);
-                }
-            } else {
-                alert("متصفحك لا يدعم مشاركة الصور مباشرة. جرب تحديث كروم.");
-            }
-        }, 'image/png');
+        // في حال لم يفتح التطبيق، يرجى التأكد من أن "iPrint" هو التطبيق الافتراضي للصور
     }
 </script>
 </body>
