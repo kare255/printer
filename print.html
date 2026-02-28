@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>طباعة ميزان - SC03h</title>
+    <title>طباعة ملصق الباركود</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
         .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
@@ -17,18 +17,17 @@
 <body>
 
 <div class="card">
-    <h2>نظام طباعة الوزن</h2>
+    <h2>طباعة باركود الميزان</h2>
     <p id="status">الحالة: غير متصل ❌</p>
     <button class="btn-connect" onclick="connectPrinter()">1. ربط الطابعة</button>
     <hr>
-    <input type="number" id="weightInput" placeholder="أدخل الوزن">
-    <input type="text" id="idInput" placeholder="رقم الميزان">
-    <button class="btn-print" onclick="printLabel()">2. طباعة فورا 🖨️</button>
+    <input type="number" id="productCode" placeholder="كود المنتج (5 أرقام)">
+    <input type="number" id="weightInput" placeholder="الوزن (مثلاً 01250 لـ 1.25كج)">
+    <button class="btn-print" onclick="printCPCL()">2. طباعة الباركود 🖨️</button>
 </div>
 
 <script>
     let printerCharacteristic = null;
-    // هذه الأرقام تم استخراجها من صورة nRF Connect الخاصة بك
     const SERVICE_UUID = '0000ae30-0000-1000-8000-00805f9b34fb'; 
     const CHAR_UUID = '0000ae01-0000-1000-8000-00805f9b34fb'; 
 
@@ -41,35 +40,39 @@
             const server = await device.gatt.connect();
             const service = await server.getPrimaryService(SERVICE_UUID);
             printerCharacteristic = await service.getCharacteristic(CHAR_UUID);
-            
-            document.getElementById('status').innerText = "الحالة: متصل بـ " + device.name + " ✅";
+            document.getElementById('status').innerText = "متصل بـ " + device.name + " ✅";
             document.getElementById('status').style.color = "green";
         } catch (error) {
             alert("فشل الاتصال: " + error);
         }
     }
 
-    async function printLabel() {
+    async function printCPCL() {
         if (!printerCharacteristic) { alert("اتصل بالطابعة أولاً!"); return; }
-        
-        const weight = document.getElementById('weightInput').value;
-        const id = document.getElementById('idInput').value;
-        const encoder = new TextEncoder();
-        
-        // أوامر الطباعة الأساسية
-        const init = new Uint8Array([0x1B, 0x40]); 
-        const center = new Uint8Array([0x1B, 0x61, 0x01]);
-        const textData = encoder.encode("Weight: " + weight + " kg\nID: " + id + "\n\n");
-        const cut = new Uint8Array([0x1D, 0x56, 0x42, 0x00]);
 
+        // تجهيز أرقام الباركود
+        const prefix = "21"; // ثابت
+        const code = document.getElementById('productCode').value.padStart(5, '0').substring(0, 5);
+        const weight = document.getElementById('weightInput').value.padStart(5, '0').substring(0, 5);
+        const suffix = "0"; // ثابت
+        
+        const fullBarcode = prefix + code + weight + suffix; // المجموع 13 رقم
+
+        // أمر الطباعة بلغة CPCL (رسم الباركود)
+        const cpclCommand = 
+            "! 0 200 200 250 1\r\n" +             // بداية الأمر، ارتفاع الملصق 250
+            "CENTER\r\n" +                        // التوسيط
+            "BARCODE 128 1 1 50 50 10\r\n" +      // نوع الباركود 128، ارتفاعه 50
+            fullBarcode + "\r\n" +                // بيانات الباركود
+            "TEXT 7 0 50 80 " + fullBarcode + "\r\n" + // كتابة الأرقام تحت الباركود
+            "PRINT\r\n";                          // أمر التنفيذ
+
+        const encoder = new TextEncoder();
         try {
-            await printerCharacteristic.writeValue(init);
-            await printerCharacteristic.writeValue(center);
-            await printerCharacteristic.writeValue(textData);
-            await printerCharacteristic.writeValue(cut);
-            alert("تم إرسال أمر الطباعة!");
+            await printerCharacteristic.writeValue(encoder.encode(cpclCommand));
+            alert("تم إرسال الباركود: " + fullBarcode);
         } catch (error) {
-            alert("خطأ أثناء الطباعة: " + error);
+            alert("خطأ: " + error);
         }
     }
 </script>
