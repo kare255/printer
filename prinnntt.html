@@ -2,48 +2,59 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>طباعة ملصق مختصر</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; margin: 0; padding: 0; background: #f0f0f0; }
-        .no-print { background: white; padding: 20px; border-bottom: 2px solid #ddd; }
-        input { width: 80%; padding: 15px; margin: 10px; font-size: 20px; border-radius: 10px; border: 1px solid #ccc; }
-        .btn-print { width: 90%; padding: 20px; background: #28a745; color: white; border: none; border-radius: 15px; font-size: 22px; font-weight: bold; cursor: pointer; }
-        
-        /* ضبط مساحة الملصق فقط */
-        #labelArea { 
-            display: inline-block; 
-            background: white; 
-            padding: 5px; 
-            margin-top: 20px;
-        }
-        #barcodeImg { display: block; max-width: 100%; height: auto; }
+        /* إعدادات الشاشة */
+        body { font-family: sans-serif; text-align: center; margin: 0; padding: 0; background: #fff; }
+        .no-print { padding: 20px; border-bottom: 1px solid #ddd; background: #f8f9fa; }
+        input { width: 80%; padding: 12px; margin: 5px; font-size: 18px; border-radius: 8px; border: 1px solid #ccc; }
+        button { width: 85%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; }
 
+        /* منطقة الملصق: تحديد الطول تلقائياً ليقفل بعد الباركود */
+        #label-container {
+            display: inline-block;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* يمنع أي زيادة تحت الصورة */
+        }
+        #barcode-img {
+            display: block;
+            width: 100%; /* ليمتد على عرض الورق 58mm */
+            height: auto;
+        }
+
+        /* أوامر الطباعة للتحكم في طول الورقة */
         @media print {
+            @page { 
+                margin: 0; 
+                size: auto; /* يترك للمتصفح تحديد الطول بناءً على المحتوى */
+            }
+            body { margin: 0; padding: 0; }
             .no-print { display: none !important; }
-            body { background: white; }
-            @page { margin: 0; size: auto; }
-            #labelArea { margin: 0; padding: 0; width: 100%; }
+            #label-container { border: none; }
         }
     </style>
 </head>
 <body>
 
     <div class="no-print">
-        <h3>إعداد ملصق الميزان</h3>
-        <input type="number" id="pCode" placeholder="كود المنتج" oninput="generate()">
-        <input type="number" id="pWeight" placeholder="الوزن" oninput="generate()">
-        <button class="btn-print" onclick="window.print()">طـبـاعـة 🖨️</button>
+        <input type="number" id="pCode" placeholder="كود المنتج" oninput="draw()">
+        <input type="number" id="pWeight" placeholder="الوزن" oninput="draw()">
+        <br><br>
+        <button onclick="window.print()">طباعة الملصق الآن</button>
     </div>
 
-    <div id="labelArea">
-        <img id="barcodeImg" src="">
+    <div id="label-container">
+        <img id="barcode-img" src="">
     </div>
 
     <canvas id="canvas" style="display:none;"></canvas>
 
 <script>
-    function generate() {
+    function draw() {
         const c = document.getElementById('pCode').value.padStart(5, '0');
         const w = document.getElementById('pWeight').value.padStart(5, '0');
         const val = "21" + c + w + "0";
@@ -53,11 +64,11 @@
             format: "CODE128",
             displayValue: true,
             fontSize: 25,
-            height: 100,
-            width: 3,
-            margin: 5
+            height: 80, // تقليل الارتفاع لتوفير الورق
+            width: 2.5,
+            margin: 5   // تقليل الهامش لإغلاق الورقة بسرعة
         });
-        document.getElementById('barcodeImg').src = canvas.toDataURL("image/png");
+        document.getElementById('barcode-img').src = canvas.toDataURL("image/png");
     }
 </script>
 </body>
