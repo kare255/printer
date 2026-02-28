@@ -2,70 +2,54 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>نظام طباعة iPrint السريع</title>
+    <title>طباعة ملصق الميزان</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
-        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        input { width: 90%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 10px; font-size: 20px; text-align: center; }
-        .btn-print { width: 100%; padding: 20px; background: #27ae60; color: white; border: none; border-radius: 12px; font-size: 22px; font-weight: bold; cursor: pointer; }
-        #barcodePreview { margin-top: 20px; width: 100%; border: 1px solid #eee; display: none; }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f9f9f9; }
+        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 350px; margin: auto; border: 2px solid #1a73e8; }
+        input { width: 85%; padding: 15px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 20px; text-align: center; }
+        .btn-main { width: 100%; padding: 18px; background: #1a73e8; color: white; border: none; border-radius: 10px; font-size: 20px; font-weight: bold; cursor: pointer; }
+        #barcodeCanvas { margin-top: 15px; border: 1px solid #eee; width: 100%; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>طباعة باركود فورية</h2>
-    <input type="number" id="pCode" placeholder="كود المنتج">
+    <h3>تجهيز ملصق للطباعة</h3>
+    <input type="number" id="pCode" placeholder="كود الصنف">
     <input type="number" id="pWeight" placeholder="الوزن">
     
-    <button class="btn-print" onclick="generateAndPrint()">إرسال للطابعة فوراً 🖨️</button>
+    <button class="btn-main" onclick="saveAndPrint()">حفظ وطباعة فورية 🖨️</button>
     
-    <canvas id="canvas" style="display:none;"></canvas>
-    <img id="barcodePreview">
+    <canvas id="barcodeCanvas"></canvas>
 </div>
 
 <script>
-    async function generateAndPrint() {
+    function saveAndPrint() {
         const code = document.getElementById('pCode').value.padStart(5, '0');
         const weight = document.getElementById('pWeight').value.padStart(5, '0');
-        const barcodeValue = "21" + code + weight + "0";
+        const fullBarcode = "21" + code + weight + "0";
 
-        // 1. توليد الباركود كصورة عالية الدقة
-        const canvas = document.getElementById('canvas');
-        JsBarcode(canvas, barcodeValue, {
+        // 1. توليد الباركود بمقاسات مناسبة للطابعة (58mm)
+        const canvas = document.getElementById('barcodeCanvas');
+        JsBarcode(canvas, fullBarcode, {
             format: "CODE128",
             displayValue: true,
-            fontSize: 25,
+            fontSize: 24,
             height: 100,
             width: 3,
-            margin: 10
+            margin: 20,
+            background: "#ffffff"
         });
 
-        // 2. تحويل الصورة إلى رابط قابل للمشاركة
-        const imgDataUrl = canvas.toDataURL("image/png");
-        document.getElementById('barcodePreview').src = imgDataUrl;
-        document.getElementById('barcodePreview').style.display = "block";
+        // 2. تحويل الباركود لصورة وتحميلها فوراً
+        // هذه الحركة تجعل الصورة تظهر في "الصور الحديثة" داخل تطبيق iPrint
+        const link = document.createElement('a');
+        link.download = `barcode-${fullBarcode}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
 
-        // 3. استخدام "المشاركة الذكية" لفتح iPrint مباشرة
-        const blob = await (await fetch(imgDataUrl)).blob();
-        const file = new File([blob], "barcode.png", { type: "image/png" });
-
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({
-                    files: [file],
-                    title: 'Barcode Print',
-                });
-            } catch (err) {
-                console.log("تم إلغاء العملية");
-            }
-        } else {
-            // حل احتياطي: فتح الصورة في صفحة جديدة للطباعة اليدوية
-            const win = window.open("");
-            win.document.write('<img src="' + imgDataUrl + '" style="width:100%">');
-            win.print();
-        }
+        alert("تم حفظ الملصق! افتح تطبيق iPrint واختر 'طباعة الصور'.");
     }
 </script>
 </body>
