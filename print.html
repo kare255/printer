@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>طباعة ملصق الوزن</title>
+    <title>طباعة ميزان - SC03h</title>
     <style>
-        body { font-family: Arial; text-align: center; padding: 20px; background: #f4f4f4; }
-        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        input { width: 80%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 8px; font-size: 20px; }
-        button { width: 85%; padding: 15px; margin: 5px; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        input { width: 90%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 8px; font-size: 20px; }
+        button { width: 95%; padding: 15px; margin: 5px; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; }
         .btn-connect { background: #007bff; color: white; }
         .btn-print { background: #28a745; color: white; }
         #status { margin-top: 10px; color: #666; font-size: 14px; }
@@ -17,59 +17,57 @@
 <body>
 
 <div class="card">
-    <h2>طباعة ميزان</h2>
-    <p id="status">الحالة: غير متصل</p>
+    <h2>نظام طباعة الوزن</h2>
+    <p id="status">الحالة: غير متصل ❌</p>
     <button class="btn-connect" onclick="connectPrinter()">1. ربط الطابعة</button>
     <hr>
-    <input type="number" id="weightInput" placeholder="أدخل الوزن (كجم)">
+    <input type="number" id="weightInput" placeholder="أدخل الوزن">
     <input type="text" id="idInput" placeholder="رقم الميزان">
-    <button class="btn-print" onclick="printLabel()">2. طباعة فورا</button>
+    <button class="btn-print" onclick="printLabel()">2. طباعة فورا 🖨️</button>
 </div>
 
 <script>
     let printerCharacteristic = null;
+    // هذه الأرقام تم استخراجها من صورة nRF Connect الخاصة بك
+    const SERVICE_UUID = '0000ae30-0000-1000-8000-00805f9b34fb'; 
+    const CHAR_UUID = '0000ae01-0000-1000-8000-00805f9b34fb'; 
 
-    // 1. الاتصال بالطابعة
     async function connectPrinter() {
         try {
             const device = await navigator.bluetooth.requestDevice({
-                acceptAllDevices: true,
-                optionalServices: ['0000ff00-0000-1000-8000-00805f9b34fb'] // UUID افتراضي لأغلب الطابعات الصينية
+                filters: [{ namePrefix: 'SC03h' }],
+                optionalServices: [SERVICE_UUID]
             });
             const server = await device.gatt.connect();
-            const service = await server.getPrimaryService('0000ff00-0000-1000-8000-00805f9b34fb');
-            printerCharacteristic = await service.getCharacteristic('0000ff02-0000-1000-8000-00805f9b34fb');
+            const service = await server.getPrimaryService(SERVICE_UUID);
+            printerCharacteristic = await service.getCharacteristic(CHAR_UUID);
             
-            document.getElementById('status').innerText = "الحالة: متصل بـ " + device.name;
+            document.getElementById('status').innerText = "الحالة: متصل بـ " + device.name + " ✅";
             document.getElementById('status').style.color = "green";
         } catch (error) {
             alert("فشل الاتصال: " + error);
         }
     }
 
-    // 2. إرسال أمر الطباعة (ESC/POS)
     async function printLabel() {
         if (!printerCharacteristic) { alert("اتصل بالطابعة أولاً!"); return; }
         
         const weight = document.getElementById('weightInput').value;
         const id = document.getElementById('idInput').value;
-        
-        // تجهيز الأوامر (تهيئة + توسيط + باركود + سحب ورق)
         const encoder = new TextEncoder();
-        const init = new Uint8Array([0x1B, 0x40]); // تهيئة
-        const center = new Uint8Array([0x1B, 0x61, 0x01]); // توسيط
-        const barcodeCmd = new Uint8Array([0x1D, 0x6B, 0x45, 10]); // أمر باركود Code128
-        const barcodeData = encoder.encode(id + weight); 
-        const feed = new Uint8Array([0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x42, 0x00]); // سحب ورق وقص
+        
+        // أوامر الطباعة الأساسية
+        const init = new Uint8Array([0x1B, 0x40]); 
+        const center = new Uint8Array([0x1B, 0x61, 0x01]);
+        const textData = encoder.encode("Weight: " + weight + " kg\nID: " + id + "\n\n");
+        const cut = new Uint8Array([0x1D, 0x56, 0x42, 0x00]);
 
         try {
             await printerCharacteristic.writeValue(init);
             await printerCharacteristic.writeValue(center);
-            await printerCharacteristic.writeValue(encoder.encode("Weight: " + weight + " kg\n"));
-            await printerCharacteristic.writeValue(barcodeCmd);
-            await printerCharacteristic.writeValue(barcodeData);
-            await printerCharacteristic.writeValue(feed);
-            console.log("تم الإرسال بنجاح");
+            await printerCharacteristic.writeValue(textData);
+            await printerCharacteristic.writeValue(cut);
+            alert("تم إرسال أمر الطباعة!");
         } catch (error) {
             alert("خطأ أثناء الطباعة: " + error);
         }
