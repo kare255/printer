@@ -2,33 +2,33 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>طباعة سريعة</title>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <title>طباعة سريعة جداً</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; }
-        .card { border: 2px solid #007bff; padding: 20px; border-radius: 15px; max-width: 350px; margin: auto; }
-        input { width: 80%; padding: 10px; margin: 10px; font-size: 18px; border-radius: 5px; border: 1px solid #ccc; }
-        button { width: 90%; padding: 15px; margin: 5px; font-size: 18px; cursor: pointer; border-radius: 10px; border: none; font-weight: bold; }
-        .btn-connect { background: #007bff; color: white; }
-        .btn-print { background: #28a745; color: white; }
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #fdfdfd; }
+        .card { border: 2px solid #27ae60; padding: 25px; border-radius: 20px; max-width: 380px; margin: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        input { width: 85%; padding: 15px; margin: 10px; font-size: 22px; border-radius: 10px; border: 2px solid #ddd; text-align: center; }
+        button { width: 95%; padding: 18px; margin: 8px; font-size: 19px; cursor: pointer; border-radius: 12px; border: none; font-weight: bold; transition: 0.2s; }
+        .btn-connect { background: #3498db; color: white; }
+        .btn-print { background: #27ae60; color: white; box-shadow: 0 4px #1e8449; }
+        .btn-print:active { box-shadow: none; transform: translateY(4px); }
+        #status { margin-bottom: 15px; font-weight: bold; color: #7f8c8d; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h3>نظام الطباعة المباشر</h3>
-    <button class="btn-connect" onclick="connectDevice()">1. ربط الطابعة</button>
+    <div id="status">الحالة: غير متصل ❌</div>
+    <button class="btn-connect" onclick="connect()">1. ربط الطابعة (مرة واحدة)</button>
     <hr>
     <input type="number" id="pCode" placeholder="كود المنتج">
     <input type="number" id="pWeight" placeholder="الوزن">
-    <button class="btn-print" onclick="printDirect()">2. طباعة الآن 🖨️</button>
-    <canvas id="canvas" style="display:none;"></canvas>
+    <button class="btn-print" onclick="fastPrint()">2. طباعة الآن 🖨️</button>
 </div>
 
 <script>
-    let deviceChar = null;
+    let printer = null;
 
-    async function connectDevice() {
+    async function connect() {
         try {
             const device = await navigator.bluetooth.requestDevice({
                 filters: [{ namePrefix: 'SC03' }],
@@ -36,49 +36,37 @@
             });
             const server = await device.gatt.connect();
             const service = await server.getPrimaryService('0000ae30-0000-1000-8000-00805f9b34fb');
-            deviceChar = await service.getCharacteristic('0000ae01-0000-1000-8000-00805f9b34fb');
-            alert("تم الاتصال بنجاح! ✅");
-        } catch (e) { alert("فشل الربط: " + e); }
+            printer = await service.getCharacteristic('0000ae01-0000-1000-8000-00805f9b34fb');
+            document.getElementById('status').innerText = "متصل ✅ جاهز للعمل";
+            document.getElementById('status').style.color = "#27ae60";
+        } catch (e) { alert("فشل الاتصال: " + e); }
     }
 
-    async function printDirect() {
-        if (!deviceChar) return alert("اربط الطابعة أولاً!");
+    async function fastPrint() {
+        if (!printer) return alert("الرجاء ربط الطابعة أولاً!");
 
-        const val = "21" + document.getElementById('pCode').value.padStart(5, '0') + 
-                    document.getElementById('pWeight').value.padStart(5, '0') + "0";
+        const code = document.getElementById('pCode').value.padStart(5, '0');
+        const weight = document.getElementById('pWeight').value.padStart(5, '0');
+        const barcode = "21" + code + weight + "0";
 
-        // توليد الباركود
-        const canvas = document.getElementById('canvas');
-        JsBarcode(canvas, val, { format: "CODE128", height: 60, width: 2 });
+        const enc = new TextEncoder();
         
-        const ctx = canvas.getContext('2d');
-        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        
-        // تحويل الصورة لبيانات طابعة
-        const wBytes = Math.ceil(img.width / 8);
-        const data = new Uint8Array(wBytes * img.height);
-        for (let y = 0; y < img.height; y++) {
-            for (let x = 0; x < img.width; x++) {
-                const idx = (y * img.width + x) * 4;
-                if (img.data[idx] < 128) data[y * wBytes + Math.floor(x/8)] |= (0x80 >> (x % 8));
-            }
-        }
+        // أوامر ESC/POS المباشرة (نصية خفيفة جداً)
+        const commands = [
+            new Uint8Array([0x1B, 0x40]), // Reset
+            new Uint8Array([0x1B, 0x61, 0x01]), // Center
+            enc.encode("\n" + barcode + "\n"), // طباعة الرقم كنص
+            new Uint8Array([0x1D, 0x6B, 0x04]), // أمر بدء الباركود (Code39)
+            enc.encode(barcode + "\0"), // بيانات الباركود
+            new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A]) // تغذية ورق للخروج
+        ];
 
         try {
-            // إرسال الأوامر (مقطعة لتجنب خطأ 512 بايت)
-            await send(new Uint8Array([0x1B, 0x40, 0x1B, 0x61, 0x01])); // تهيئة وتوسيط
-            await send(new Uint8Array([0x1D, 0x76, 0x30, 0x00, wBytes, 0x00, img.height, 0x00])); // رأس الصورة
-            
-            // إرسال بيانات الصورة قطعاً
-            for (let i = 0; i < data.length; i += 100) {
-                await deviceChar.writeValue(data.slice(i, i + 100));
+            for (let cmd of commands) {
+                await printer.writeValue(cmd);
             }
-
-            await send(new Uint8Array([0x0A, 0x0A, 0x0A])); // تغذية ورق
         } catch (e) { alert("خطأ طباعة: " + e); }
     }
-
-    async function send(d) { await deviceChar.writeValue(d); }
 </script>
 </body>
 </html>
