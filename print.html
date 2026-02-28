@@ -3,27 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>طباعة باركود</title>
+    <title>طباعة ملصق</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
         .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
         input { width: 90%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 8px; font-size: 20px; }
         button { width: 95%; padding: 15px; margin: 5px; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; }
         .btn-connect { background: #007bff; color: white; }
-        .btn-print { background: #e67e22; color: white; }
-        #status { margin-top: 10px; color: #666; font-size: 14px; }
+        .btn-print { background: #d35400; color: white; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>نظام الطباعة السريع</h2>
+    <h2>نظام الملصقات المتطور</h2>
     <p id="status">الحالة: غير متصل ❌</p>
     <button class="btn-connect" onclick="connectPrinter()">1. ربط الطابعة</button>
     <hr>
-    <input type="number" id="pCode" placeholder="كود المنتج (5 أرقام)">
-    <input type="number" id="pWeight" placeholder="الوزن (5 أرقام)">
-    <button class="btn-print" onclick="fastPrint()">2. طباعة الآن 🖨️</button>
+    <input type="number" id="pCode" placeholder="كود المنتج">
+    <input type="number" id="pWeight" placeholder="الوزن">
+    <button class="btn-print" onclick="printTSPL()">2. طباعة ملصق 🖨️</button>
 </div>
 
 <script>
@@ -41,36 +40,30 @@
             const service = await server.getPrimaryService(S_UUID);
             printerChar = await service.getCharacteristic(C_UUID);
             document.getElementById('status').innerText = "متصل ✅";
-            document.getElementById('status').style.color = "green";
-        } catch (e) { alert("خطأ: " + e); }
+        } catch (e) { alert(e); }
     }
 
-    async function fastPrint() {
+    async function printTSPL() {
         if (!printerChar) return alert("اربط الطابعة!");
 
         const code = document.getElementById('pCode').value.padStart(5, '0');
         const weight = document.getElementById('pWeight').value.padStart(5, '0');
         const barcode = "21" + code + weight + "0";
 
-        const enc = new TextEncoder();
-        
-        // أوامر ESC/POS بسيطة جداً (بدون صور)
-        const cmds = [
-            new Uint8Array([0x1B, 0x40]), // Reset
-            new Uint8Array([0x1B, 0x61, 0x01]), // Center
-            new Uint8Array([0x1D, 0x68, 0x64]), // Height 100
-            new Uint8Array([0x1D, 0x77, 0x03]), // Width 3
-            new Uint8Array([0x1D, 0x48, 0x02]), // Text below
-            new Uint8Array([0x1D, 0x6B, 0x04]), // Barcode Type CODE39 (أسهل نوع للطابعات)
-            enc.encode(barcode + "\0"), // البيانات مع إنهاء
-            new Uint8Array([0x0A, 0x0A, 0x1D, 0x56, 0x01]) // Feed and Cut
-        ];
+        // أوامر TSPL (اللغة المخصصة لطابعات الملصقات الصينية)
+        const command = 
+            "SIZE 40 mm, 30 mm\r\n" +  // حجم الملصق
+            "GAP 2 mm, 0 mm\r\n" +     // الفاصل
+            "DIRECTION 1\r\n" +
+            "CLS\r\n" +                // مسح الذاكرة
+            "TEXT 100,20,\"3\",0,1,1,\"Weight: " + weight + "\"\r\n" +
+            "BARCODE 50,60,\"128\",80,1,0,2,2,\"" + barcode + "\"\r\n" +
+            "PRINT 1\r\n";             // أمر الطباعة
 
+        const enc = new TextEncoder();
         try {
-            for (let c of cmds) {
-                await printerChar.writeValue(c);
-            }
-            alert("تم الإرسال! لو ما طبعتش تأكد من الورق.");
+            await printerChar.writeValue(enc.encode(command));
+            alert("تم الإرسال بلغة TSPL!");
         } catch (e) { alert("خطأ: " + e); }
     }
 </script>
