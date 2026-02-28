@@ -2,73 +2,61 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>طباعة ملصق</title>
+    <title>طباعة ملصق مختصر</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
-        /* إعدادات العرض في المتصفح */
-        body { font-family: sans-serif; text-align: center; margin: 0; padding: 10px; background: #f0f0f0; }
-        .controls { background: white; padding: 15px; border-bottom: 2px solid #ddd; margin-bottom: 20px; }
-        input { width: 80%; padding: 12px; margin: 5px; font-size: 18px; border: 1px solid #ccc; border-radius: 8px; }
-        button { width: 85%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; }
+        body { font-family: sans-serif; text-align: center; margin: 0; padding: 0; background: #f0f0f0; }
+        .no-print { background: white; padding: 20px; border-bottom: 2px solid #ddd; }
+        input { width: 80%; padding: 15px; margin: 10px; font-size: 20px; border-radius: 10px; border: 1px solid #ccc; }
+        .btn-print { width: 90%; padding: 20px; background: #28a745; color: white; border: none; border-radius: 15px; font-size: 22px; font-weight: bold; cursor: pointer; }
         
-        /* منطقة الباركود */
-        #printSection { display: inline-block; background: white; padding: 10px; }
-        #barcodeImg { max-width: 100%; height: auto; display: block; }
+        /* ضبط مساحة الملصق فقط */
+        #labelArea { 
+            display: inline-block; 
+            background: white; 
+            padding: 5px; 
+            margin-top: 20px;
+        }
+        #barcodeImg { display: block; max-width: 100%; height: auto; }
 
-        /* الأوامر السحرية للطباعة (تطبيق iPrint سيلتزم بها) */
         @media print {
-            @page { size: auto; margin: 0; } /* إلغاء هوامش الصفحة تماماً */
-            .controls, button { display: none !important; } /* إخفاء أي شيء ليس باركود */
-            body { background: white; margin: 0; padding: 0; }
-            #printSection { 
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                margin: 0;
-                padding: 0;
-            }
-            #barcodeImg { 
-                width: 100% !important; 
-                height: auto !important; 
-            }
+            .no-print { display: none !important; }
+            body { background: white; }
+            @page { margin: 0; size: auto; }
+            #labelArea { margin: 0; padding: 0; width: 100%; }
         }
     </style>
 </head>
 <body>
 
-    <div class="controls">
-        <h3>بيانات الملصق</h3>
-        <input type="number" id="pCode" placeholder="كود الصنف" oninput="makeBarcode()">
-        <input type="number" id="pWeight" placeholder="الوزن" oninput="makeBarcode()">
-        <br><br>
-        <button onclick="window.print()">اضغط هنا للطباعة الفورية</button>
+    <div class="no-print">
+        <h3>إعداد ملصق الميزان</h3>
+        <input type="number" id="pCode" placeholder="كود المنتج" oninput="generate()">
+        <input type="number" id="pWeight" placeholder="الوزن" oninput="generate()">
+        <button class="btn-print" onclick="window.print()">طـبـاعـة 🖨️</button>
     </div>
 
-    <div id="printSection">
-        <img id="barcodeImg" src="" alt="الباركود سيظهر هنا">
+    <div id="labelArea">
+        <img id="barcodeImg" src="">
     </div>
 
-    <canvas id="tempCanvas" style="display:none;"></canvas>
+    <canvas id="canvas" style="display:none;"></canvas>
 
 <script>
-    function makeBarcode() {
+    function generate() {
         const c = document.getElementById('pCode').value.padStart(5, '0');
         const w = document.getElementById('pWeight').value.padStart(5, '0');
         const val = "21" + c + w + "0";
 
-        const canvas = document.getElementById('tempCanvas');
+        const canvas = document.getElementById('canvas');
         JsBarcode(canvas, val, {
             format: "CODE128",
             displayValue: true,
             fontSize: 25,
             height: 100,
             width: 3,
-            margin: 10
+            margin: 5
         });
-
-        // تحويل الباركود لصورة ثابتة
         document.getElementById('barcodeImg').src = canvas.toDataURL("image/png");
     }
 </script>
