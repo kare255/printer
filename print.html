@@ -2,106 +2,83 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>طباعة فورية بضغطة واحدة</title>
+    <title>طباعة سريعة</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f7f6; }
-        .card { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        input { width: 90%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 10px; font-size: 20px; text-align: center; }
-        button { width: 100%; padding: 18px; margin: 10px 0; border: none; border-radius: 12px; font-size: 20px; font-weight: bold; cursor: pointer; }
+        body { font-family: sans-serif; text-align: center; padding: 20px; }
+        .card { border: 2px solid #007bff; padding: 20px; border-radius: 15px; max-width: 350px; margin: auto; }
+        input { width: 80%; padding: 10px; margin: 10px; font-size: 18px; border-radius: 5px; border: 1px solid #ccc; }
+        button { width: 90%; padding: 15px; margin: 5px; font-size: 18px; cursor: pointer; border-radius: 10px; border: none; font-weight: bold; }
         .btn-connect { background: #007bff; color: white; }
         .btn-print { background: #28a745; color: white; }
-        #status { margin-top: 10px; font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>طباعة باركود الميزان السريعة</h2>
-    <p id="status">الحالة: بانتظار الربط 🔌</p>
-    <button class="btn-connect" onclick="connectPrinter()">1. ربط الطابعة أول مرة</button>
+    <h3>نظام الطباعة المباشر</h3>
+    <button class="btn-connect" onclick="connectDevice()">1. ربط الطابعة</button>
     <hr>
     <input type="number" id="pCode" placeholder="كود المنتج">
     <input type="number" id="pWeight" placeholder="الوزن">
-    <button class="btn-print" onclick="generateAndPrintDirectly()">2. طباعة الآن بضغطة واحدة 🖨️</button>
+    <button class="btn-print" onclick="printDirect()">2. طباعة الآن 🖨️</button>
     <canvas id="canvas" style="display:none;"></canvas>
 </div>
 
 <script>
-    let printerChar = null;
+    let deviceChar = null;
 
-    async function connectPrinter() {
+    async function connectDevice() {
         try {
             const device = await navigator.bluetooth.requestDevice({
-                filters: [{ namePrefix: 'SC03h' }],
+                filters: [{ namePrefix: 'SC03' }],
                 optionalServices: ['0000ae30-0000-1000-8000-00805f9b34fb']
             });
             const server = await device.gatt.connect();
             const service = await server.getPrimaryService('0000ae30-0000-1000-8000-00805f9b34fb');
-            printerChar = await service.getCharacteristic('0000ae01-0000-1000-8000-00805f9b34fb');
-            document.getElementById('status').innerText = "متصل ✅ جاهز للطباعة السريعة";
-            document.getElementById('status').style.color = "green";
-        } catch (e) { alert("خطأ اتصال: " + e); }
+            deviceChar = await service.getCharacteristic('0000ae01-0000-1000-8000-00805f9b34fb');
+            alert("تم الاتصال بنجاح! ✅");
+        } catch (e) { alert("فشل الربط: " + e); }
     }
 
-    async function generateAndPrintDirectly() {
-        if (!printerChar) return alert("الرجاء ربet الطابعة أولاً!");
+    async function printDirect() {
+        if (!deviceChar) return alert("اربط الطابعة أولاً!");
 
-        const barcodeData = "21" + 
-            document.getElementById('pCode').value.padStart(5, '0') + 
-            document.getElementById('pWeight').value.padStart(5, '0') + "0";
+        const val = "21" + document.getElementById('pCode').value.padStart(5, '0') + 
+                    document.getElementById('pWeight').value.padStart(5, '0') + "0";
 
-        // 1. توليد الباركود داخلياً
+        // توليد الباركود
         const canvas = document.getElementById('canvas');
-        JsBarcode(canvas, barcodeData, {
-            format: "CODE128", displayValue: true, height: 70, width: 2
-        });
-
+        JsBarcode(canvas, val, { format: "CODE128", height: 60, width: 2 });
+        
         const ctx = canvas.getContext('2d');
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const bmp = convertToBmp(imgData);
-
-        try {
-            // 2. إرسال أوامر التهيئة
-            await sendData(new Uint8Array([0x1B, 0x40, 0x1B, 0x61, 0x01]));
-            
-            // 3. إرسال رأس الصورة
-            const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, bmp.wBytes, 0x00, bmp.height, 0x00]);
-            await sendData(header);
-
-            // 4. إرسال بيانات الصورة مقطعة لتجنب خطأ الـ 512 بايت
-            await sendData(bmp.data);
-
-            // 5. تغذية ورق لقطع الملصق
-            await sendData(new Uint8Array([0x0A, 0x0A, 0x0A]));
-            console.log("تمت الطباعة بنجاح");
-        } catch (e) { alert("خطأ أثناء الطباعة: " + e); }
-    }
-
-    // وظيفة تقسيم البيانات (Chunking) لحل مشكلة الـ 512 بايت
-    async function sendData(data) {
-        const CHUNK_SIZE = 100; // نرسل 100 بايت فقط في كل مرة لضمان السرعة والأمان
-        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-            const chunk = data.slice(i, i + CHUNK_SIZE);
-            await printerChar.writeValue(chunk);
-        }
-    }
-
-    function convertToBmp(imgData) {
-        const w = imgData.width;
-        const h = imgData.height;
-        const wBytes = Math.ceil(w / 8);
-        const res = new Uint8Array(wBytes * h);
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const idx = (y * w + x) * 4;
-                if ((imgData.data[idx] + imgData.data[idx+1] + imgData.data[idx+2]) / 3 < 128) {
-                    res[y * wBytes + Math.floor(x / 8)] |= (0x80 >> (x % 8));
-                }
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // تحويل الصورة لبيانات طابعة
+        const wBytes = Math.ceil(img.width / 8);
+        const data = new Uint8Array(wBytes * img.height);
+        for (let y = 0; y < img.height; y++) {
+            for (let x = 0; x < img.width; x++) {
+                const idx = (y * img.width + x) * 4;
+                if (img.data[idx] < 128) data[y * wBytes + Math.floor(x/8)] |= (0x80 >> (x % 8));
             }
         }
-        return { data: res, wBytes: wBytes, height: h };
+
+        try {
+            // إرسال الأوامر (مقطعة لتجنب خطأ 512 بايت)
+            await send(new Uint8Array([0x1B, 0x40, 0x1B, 0x61, 0x01])); // تهيئة وتوسيط
+            await send(new Uint8Array([0x1D, 0x76, 0x30, 0x00, wBytes, 0x00, img.height, 0x00])); // رأس الصورة
+            
+            // إرسال بيانات الصورة قطعاً
+            for (let i = 0; i < data.length; i += 100) {
+                await deviceChar.writeValue(data.slice(i, i + 100));
+            }
+
+            await send(new Uint8Array([0x0A, 0x0A, 0x0A])); // تغذية ورق
+        } catch (e) { alert("خطأ طباعة: " + e); }
     }
+
+    async function send(d) { await deviceChar.writeValue(d); }
 </script>
 </body>
 </html>
