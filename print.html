@@ -2,138 +2,54 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام طباعة ميزان</title>
+    <title>طباعة مباشرة</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
-        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        input { width: 90%; padding: 15px; margin: 10px 0; border: 2px solid #ddd; border-radius: 8px; font-size: 20px; text-align: center; }
-        button { width: 95%; padding: 15px; margin: 5px; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .btn-connect { background: #007bff; color: white; }
-        .btn-print { background: #27ae60; color: white; }
-        #status { margin-top: 10px; color: #666; font-size: 14px; font-weight: bold; }
-    </style><!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>اختبار الطباعة المستمرة</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
-        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        button { width: 95%; padding: 15px; margin: 10px 0; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; }
-        .btn-connect { background: #007bff; color: white; }
-        .btn-test { background: #e74c3c; color: white; }
-        #status { margin-top: 10px; font-weight: bold; }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 15px; border: 1px solid #ddd; max-width: 400px; margin: auto; }
+        button { width: 100%; padding: 15px; margin: 10px 0; font-size: 18px; cursor: pointer; border-radius: 8px; border: none; }
+        .btn-blue { background: #007bff; color: white; }
+        .btn-orange { background: #e67e22; color: white; }
     </style>
 </head>
 <body>
-
 <div class="card">
-    <h2>اختبار الطابعة (ورق مستمر)</h2>
-    <p id="status">الحالة: غير متصل ❌</p>
-    <button class="btn-connect" onclick="connect()">1. ربط الطابعة</button>
-    <button class="btn-test" onclick="forcePrint()">2. تجربة طباعة نص 🖨️</button>
+    <h2>نظام الطباعة المباشر</h2>
+    <button class="btn-blue" onclick="connect()">1. ربط الطابعة (Bluetooth)</button>
+    <button class="btn-orange" onclick="printRaw()">2. طباعة تجريبية فورية 🖨️</button>
 </div>
 
 <script>
-    let char = null;
-    const S_UUID = '0000ae30-0000-1000-8000-00805f9b34fb'; 
-    const C_UUID = '0000ae01-0000-1000-8000-00805f9b34fb'; 
+    let printerCharacteristic = null;
 
     async function connect() {
         try {
             const device = await navigator.bluetooth.requestDevice({
                 filters: [{ namePrefix: 'SC03h' }],
-                optionalServices: [S_UUID]
+                optionalServices: ['0000ae30-0000-1000-8000-00805f9b34fb']
             });
             const server = await device.gatt.connect();
-            const service = await server.getPrimaryService(S_UUID);
-            char = await service.getCharacteristic(C_UUID);
-            document.getElementById('status').innerText = "متصل ✅";
-            document.getElementById('status').style.color = "green";
-        } catch (e) { alert("خطأ: " + e); }
-    }
-
-    async function forcePrint() {
-        if (!char) return alert("اربط الطابعة أولاً!");
-
-        const encoder = new TextEncoder();
-        
-        // أوامر بسيطة جداً: تهيئة + نص + سطور فارغة كثيرة
-        const testData = [
-            new Uint8Array([0x1B, 0x40]), // تهيئة الطابعة (Reset)
-            encoder.encode("TEST PRINT\n"),
-            encoder.encode("BARCODE SYSTEM OK\n"),
-            new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A]) // 6 أسطر فارغة لإجبار الورق على الخروج
-        ];
-
-        try {
-            for (let data of testData) {
-                await char.writeValue(data);
-            }
-            alert("تم إرسال البيانات! إذا لم يخرج ورق، المشكلة في وضع الطابعة.");
-        } catch (e) { alert("خطأ طباعة: " + e); }
-    }
-</script>
-</body>
-</html>
-
-</head>
-<body>
-
-<div class="card">
-    <h2>طباعة باركود الميزان</h2>
-    <p id="status">الحالة: غير متصل ❌</p>
-    <button class="btn-connect" onclick="connect()">1. ربط الطابعة</button>
-    <hr>
-    <input type="number" id="pCode" placeholder="كود المنتج (5 أرقام)">
-    <input type="number" id="pWeight" placeholder="الوزن (5 أرقام)">
-    <button class="btn-print" onclick="printLabel()">2. طباعة الآن 🖨️</button>
-</div>
-
-<script>
-    let char = null;
-    // الـ UUIDs اللي ظهرت في الصور الخاصة بجهازك
-    const S_UUID = '0000ae30-0000-1000-8000-00805f9b34fb'; 
-    const C_UUID = '0000ae01-0000-1000-8000-00805f9b34fb'; 
-
-    async function connect() {
-        try {
-            const device = await navigator.bluetooth.requestDevice({
-                filters: [{ namePrefix: 'SC03h' }],
-                optionalServices: [S_UUID]
-            });
-            const server = await device.gatt.connect();
-            const service = await server.getPrimaryService(S_UUID);
-            char = await service.getCharacteristic(C_UUID);
-            document.getElementById('status').innerText = "متصل بـ " + device.name + " ✅";
-            document.getElementById('status').style.color = "green";
+            const service = await server.getPrimaryService('0000ae30-0000-1000-8000-00805f9b34fb');
+            printerCharacteristic = await service.getCharacteristic('0000ae01-0000-1000-8000-00805f9b34fb');
+            alert("تم الاتصال بنجاح!");
         } catch (e) { alert("خطأ اتصال: " + e); }
     }
 
-    async function printLabel() {
-        if (!char) return alert("الرجاء ربط الطابعة أولاً!");
-
-        const code = document.getElementById('pCode').value.padStart(5, '0');
-        const weight = document.getElementById('pWeight').value.padStart(5, '0');
-        const barcodeData = "21" + code + weight + "0";
-
-        // أوامر TSPL - لغة طابعات الملصقات الصينية الأصلية
-        const tspl = 
-            "SIZE 40 mm, 30 mm\r\n" +  // تحديد حجم الملصق (عدله حسب ورقك)
-            "GAP 2 mm, 0 mm\r\n" +     // الفاصل بين الملصقات
-            "DIRECTION 1\r\n" +        // اتجاه الطباعة
-            "CLS\r\n" +                // مسح الذاكرة المؤقتة
-            "BARCODE 40,50,\"128\",80,1,0,2,2,\"" + barcodeData + "\"\r\n" + // رسم الباركود
-            "TEXT 40,140,\"3\",0,1,1,\"" + barcodeData + "\"\r\n" +           // الأرقام تحته
-            "PRINT 1,1\r\n";           // أمر التنفيذ النهائي
-
+    async function printRaw() {
+        if (!printerCharacteristic) return alert("اربط الطابعة أولاً!");
+        
+        // إرسال نص خام + أوامر تغذية ورق بسيطة جداً
         const encoder = new TextEncoder();
+        const data = [
+            new Uint8Array([0x1B, 0x40]), // تهيئة
+            encoder.encode("BARCODE TEST\n123456789\n\n\n\n\n"), // نص مع 5 سطور فارغة
+            new Uint8Array([0x1D, 0x56, 0x01]) // أمر قطع/تغذية
+        ];
+
         try {
-            // إرسال الأمر كبيانات خام
-            await char.writeValue(encoder.encode(tspl));
-            alert("تم إرسال أمر الطباعة بنجاح!");
+            for (let chunk of data) {
+                await printerCharacteristic.writeValue(chunk);
+            }
+            alert("تم الإرسال! انظر للطابعة.");
         } catch (e) { alert("خطأ طباعة: " + e); }
     }
 </script>
