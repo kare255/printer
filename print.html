@@ -12,7 +12,73 @@
         .btn-connect { background: #007bff; color: white; }
         .btn-print { background: #27ae60; color: white; }
         #status { margin-top: 10px; color: #666; font-size: 14px; font-weight: bold; }
+    </style><!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار الطباعة المستمرة</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
+        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        button { width: 95%; padding: 15px; margin: 10px 0; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; }
+        .btn-connect { background: #007bff; color: white; }
+        .btn-test { background: #e74c3c; color: white; }
+        #status { margin-top: 10px; font-weight: bold; }
     </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>اختبار الطابعة (ورق مستمر)</h2>
+    <p id="status">الحالة: غير متصل ❌</p>
+    <button class="btn-connect" onclick="connect()">1. ربط الطابعة</button>
+    <button class="btn-test" onclick="forcePrint()">2. تجربة طباعة نص 🖨️</button>
+</div>
+
+<script>
+    let char = null;
+    const S_UUID = '0000ae30-0000-1000-8000-00805f9b34fb'; 
+    const C_UUID = '0000ae01-0000-1000-8000-00805f9b34fb'; 
+
+    async function connect() {
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ namePrefix: 'SC03h' }],
+                optionalServices: [S_UUID]
+            });
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService(S_UUID);
+            char = await service.getCharacteristic(C_UUID);
+            document.getElementById('status').innerText = "متصل ✅";
+            document.getElementById('status').style.color = "green";
+        } catch (e) { alert("خطأ: " + e); }
+    }
+
+    async function forcePrint() {
+        if (!char) return alert("اربط الطابعة أولاً!");
+
+        const encoder = new TextEncoder();
+        
+        // أوامر بسيطة جداً: تهيئة + نص + سطور فارغة كثيرة
+        const testData = [
+            new Uint8Array([0x1B, 0x40]), // تهيئة الطابعة (Reset)
+            encoder.encode("TEST PRINT\n"),
+            encoder.encode("BARCODE SYSTEM OK\n"),
+            new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A]) // 6 أسطر فارغة لإجبار الورق على الخروج
+        ];
+
+        try {
+            for (let data of testData) {
+                await char.writeValue(data);
+            }
+            alert("تم إرسال البيانات! إذا لم يخرج ورق، المشكلة في وضع الطابعة.");
+        } catch (e) { alert("خطأ طباعة: " + e); }
+    }
+</script>
+</body>
+</html>
+
 </head>
 <body>
 
