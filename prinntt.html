@@ -3,73 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>طباعة ميزان سريعة</title>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <title>منشئ الفواتير السريع</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; background: #ffffff; }
-        .container { border: 2px solid #2980b9; padding: 25px; border-radius: 20px; max-width: 350px; margin: auto; }
-        input { width: 90%; padding: 15px; margin: 10px 0; font-size: 20px; border: 1px solid #ddd; border-radius: 10px; text-align: center; }
-        .btn-print { width: 100%; padding: 20px; background: #2980b9; color: white; border: none; border-radius: 12px; font-size: 22px; font-weight: bold; cursor: pointer; }
-        #barcodeImg { margin-top: 20px; width: 100%; display: none; }
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; text-align: center; }
+        .container { max-width: 400px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin: auto; }
+        input, button { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { background-color: #25D366; color: white; border: none; cursor: pointer; font-size: 16px; font-weight: bold; }
+        button:hover { background-color: #128C7E; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h3>نظام الطباعة الذكي</h3>
-    <input type="number" id="pCode" placeholder="كود المنتج" oninput="gen()">
-    <input type="number" id="pWeight" placeholder="الوزن" oninput="gen()">
+    <h2>إنشاء فاتورة واتساب</h2>
     
-    <button class="btn-print" onclick="printWithApp()">طـبـاعة الآن 🖨️</button>
+    <input type="text" id="phone" placeholder="رقم الواتساب (مثال: 201000000000)" />
+    <hr>
+    <input type="text" id="customerName" placeholder="اسم العميل" />
+    <input type="text" id="product" placeholder="اسم المنتج/الخدمة" />
+    <input type="number" id="price" placeholder="السعر" />
     
-    <div id="result">
-        <img id="barcodeImg" src="">
-    </div>
+    <button onclick="sendInvoice()">إرسال الفاتورة عبر واتساب</button>
 </div>
 
-<canvas id="c" style="display:none;"></canvas>
-
 <script>
-    // توليد الباركود فور إدخال الأرقام
-    function gen() {
-        const c = document.getElementById('pCode').value.padStart(5, '0');
-        const w = document.getElementById('pWeight').value.padStart(5, '0');
-        const val = "21" + c + w + "0";
-        const canvas = document.getElementById('c');
-        
-        JsBarcode(canvas, val, {
-            format: "CODE128",
-            displayValue: true,
-            fontSize: 25,
-            height: 100,
-            width: 3,
-            margin: 10
-        });
+    function sendInvoice() {
+        // جلب البيانات من الحقول
+        const phone = document.getElementById('phone').value.trim();
+        const customerName = document.getElementById('customerName').value;
+        const product = document.getElementById('product').value;
+        const price = document.getElementById('price').value;
 
-        const img = document.getElementById('barcodeImg');
-        img.src = canvas.toDataURL("image/png");
-        img.style.display = "inline-block";
-    }
-
-    // إرسال الصورة للتطبيق بضغطة واحدة
-    async function printWithApp() {
-        const imgSource = document.getElementById('barcodeImg').src;
-        if (!imgSource) return alert("الرجاء إدخال البيانات أولاً");
-
-        const blob = await (await fetch(imgSource)).blob();
-        const file = new File([blob], "label.png", { type: "image/png" });
-
-        // استخدام نظام المشاركة لفتح Bluetooth Print مباشرة
-        if (navigator.share) {
-            navigator.share({
-                files: [file]
-            }).then(() => {
-                console.log('تم الإرسال للتطبيق');
-            }).catch(console.error);
-        } else {
-            alert("يرجى استخدام متصفح Chrome");
+        if (!phone || !customerName || !product || !price) {
+            alert("يرجى ملء جميع الحقول!");
+            return;
         }
+
+        // تنسيق نص الرسالة
+        const message = `*--- فاتورة جديدة ---*%0A` +
+                        `*العميل:* ${customerName}%0A` +
+                        `*المنتج:* ${product}%0A` +
+                        `*الإجمالي:* ${price} ريال/جنيه%0A` +
+                        `*التاريخ:* ${new Date().toLocaleDateString('ar-EG')}`;
+
+        // رابط الواتساب العالمي
+        const whatsappURL = `https://wa.me/${phone}?text=${message}`;
+
+        // فتح الرابط في نافذة جديدة
+        window.open(whatsappURL, '_blank');
     }
 </script>
+
 </body>
 </html>
