@@ -3,55 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منشئ الفواتير السريع</title>
+    <title>مؤلف الفواتير المصورة</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; text-align: center; }
-        .container { max-width: 400px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin: auto; }
-        input, button { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { background-color: #25D366; color: white; border: none; cursor: pointer; font-size: 16px; font-weight: bold; }
-        button:hover { background-color: #128C7E; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; padding: 20px; }
+        .input-section { max-width: 500px; margin: 0 auto 20px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        input { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        
+        /* تصميم الفاتورة التي ستتحول لصورة */
+        #invoice-card { 
+            width: 350px; margin: auto; background: white; padding: 30px; border: 1px solid #eee; 
+            position: relative; text-align: right;
+        }
+        .header { border-bottom: 2px solid #25D366; padding-bottom: 10px; margin-bottom: 20px; }
+        .row { display: flex; justify-content: space-between; margin: 10px 0; border-bottom: 1px dashed #eee; padding-bottom: 5px; }
+        .total { font-size: 20px; font-weight: bold; color: #25D366; margin-top: 20px; border-top: 2px solid #25D366; padding-top: 10px; }
+        
+        .btn-group { display: flex; gap: 10px; max-width: 500px; margin: auto; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-download { background-color: #007bff; color: white; }
+        .btn-whatsapp { background-color: #25D366; color: white; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>إنشاء فاتورة واتساب</h2>
-    
-    <input type="text" id="phone" placeholder="رقم الواتساب (مثال: 201000000000)" />
-    <hr>
-    <input type="text" id="customerName" placeholder="اسم العميل" />
-    <input type="text" id="product" placeholder="اسم المنتج/الخدمة" />
-    <input type="number" id="price" placeholder="السعر" />
-    
-    <button onclick="sendInvoice()">إرسال الفاتورة عبر واتساب</button>
+<div class="input-section">
+    <h3>بيانات الفاتورة</h3>
+    <input type="text" id="in_name" placeholder="اسم العميل" oninput="update()">
+    <input type="text" id="in_item" placeholder="المنتج أو الخدمة" oninput="update()">
+    <input type="number" id="in_price" placeholder="السعر" oninput="update()">
+    <input type="text" id="in_phone" placeholder="رقم واتساب المستلم">
+</div>
+
+<div id="invoice-card">
+    <div class="header">
+        <h2 style="margin:0;">فاتورة ضريبية</h2>
+        <small id="date-text"></small>
+    </div>
+    <div class="row"><span>العميل:</span> <span id="out_name">---</span></div>
+    <div class="row"><span>البيان:</span> <span id="out_item">---</span></div>
+    <div class="total"><span>الإجمالي:</span> <span id="out_price">0</span> ج.م</div>
+    <p style="font-size: 10px; color: #888; margin-top: 30px; text-align: center;">شكراً لتعاملكم معنا</p>
+</div>
+
+<br>
+<div class="btn-group">
+    <button class="btn-download" onclick="downloadInvoice()">1. حفظ كصورة</button>
+    <button class="btn-whatsapp" onclick="openWhatsapp()">2. إرسال عبر واتساب</button>
 </div>
 
 <script>
-    function sendInvoice() {
-        // جلب البيانات من الحقول
-        const phone = document.getElementById('phone').value.trim();
-        const customerName = document.getElementById('customerName').value;
-        const product = document.getElementById('product').value;
-        const price = document.getElementById('price').value;
-
-        if (!phone || !customerName || !product || !price) {
-            alert("يرجى ملء جميع الحقول!");
-            return;
-        }
-
-        // تنسيق نص الرسالة
-        const message = `*--- فاتورة جديدة ---*%0A` +
-                        `*العميل:* ${customerName}%0A` +
-                        `*المنتج:* ${product}%0A` +
-                        `*الإجمالي:* ${price} ريال/جنيه%0A` +
-                        `*التاريخ:* ${new Date().toLocaleDateString('ar-EG')}`;
-
-        // رابط الواتساب العالمي
-        const whatsappURL = `https://wa.me/${phone}?text=${message}`;
-
-        // فتح الرابط في نافذة جديدة
-        window.open(whatsappURL, '_blank');
+    // تحديث البيانات لحظياً في التصميم
+    function update() {
+        document.getElementById('out_name').innerText = document.getElementById('in_name').value || '---';
+        document.getElementById('out_item').innerText = document.getElementById('in_item').value || '---';
+        document.getElementById('out_price').innerText = document.getElementById('in_price').value || '0';
+        document.getElementById('date-text').innerText = new Date().toLocaleString('ar-EG');
     }
+
+    // وظيفة تحويل القسم إلى صورة وتحميلها
+    function downloadInvoice() {
+        const invoice = document.getElementById('invoice-card');
+        html2canvas(invoice).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'invoice-' + Date.now() + '.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+    }
+
+    // فتح الواتساب
+    function openWhatsapp() {
+        const phone = document.getElementById('in_phone').value;
+        if(!phone) return alert("ضع رقم الواتساب أولاً");
+        window.open(`https://wa.me/${phone}?text=مرفق لكم صورة الفاتورة`, '_blank');
+    }
+    
+    update(); // تشغيل التاريخ عند التحميل
 </script>
 
 </body>
